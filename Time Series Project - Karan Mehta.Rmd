@@ -1,0 +1,891 @@
+---
+title: "STAT 443 - Time Series Project"
+author: "Karan Mehta"
+date: "7/27/2017"
+output: pdf_document
+---
+\begin{center}
+Hany Fahmy \\
+Group B 
+\end{center}
+\newpage
+
+
+# Question 1
+```{r setup, include=FALSE}
+GDPdata <- read.csv("~/Documents/STAT 443/Project/GDP_CONS_Canada.csv")
+A1data <- read.csv("~/Documents/STAT 443/CONS_Canada.csv")
+# W1 is the gross domestic product
+W1t <-  as.numeric(as.character(GDPdata$GDP))
+# W2 is the expenditure of Canadians products and services 
+W2t <- as.numeric(as.character(A1data$Seasonally.Adjusted))
+```
+
+```{r echo=FALSE, fig.width=5, fig.height=3, fig.align='center'}
+plot(W1t, main = bquote('Raw Series of W'['1t']), type = "l")
+plot(W2t, main = bquote('Raw Series of W'['2t']), type = "l")
+```
+
+Here we can see that the shape of the curve between the Raw time series of seasonally adjusted personal expenditure and GDP have very little differences as both time series have an upward linear trend. In addition, the peaks and troughs of both plots occur at around the same time period. This indicates there may be some correlation between the seasonally adjusted personal expenditure and the GDP. However, there are many more tests necessary before making and assertions about the relationships between these two time series models. 
+
+# Question 2
+```{r, include=FALSE}
+Xt = log(W1t)
+```
+
+We define $X_{t} = ln(W_{1t})$. Since $W_{1t}$ describes the GDP, its values are inherently positive, as a result it cannot be normally distributed. Therefore we use the $Log-Linear law$  which allows for the use of a Normal Distribution through the application of a natural logarithim. In addition, with the use of $X_{t}$, it can now be decomposed into a Trend component($T_{t}$), Cyclical component($Y_{t}$) and a Seasonal component($S_{t}$) (i.e $X_{t} = T_{t} + Y_{t} + S_{t}$). The focus of this study is on the cyclical component $Y_{t}$ and we will now attempt to isolate it. 
+
+```{r, include=FALSE}
+# DS Model 
+dX <- diff(Xt)
+dsmodel <-lm(dX~1)
+summary(dsmodel)
+Ytds <- dsmodel$residuals
+muhat<- 0.0089863
+
+#TS Model
+mut <- 1:length(Xt)
+tsmodel <- lm(Xt~mut)
+summary(tsmodel)
+Ytts <- tsmodel$residuals
+muts <- 0.008263494
+```
+
+```{r, echo=FALSE}
+plot(Ytts, type = "l", main = bquote('Trend Stationary Measure of the Business Y'['t']))
+```
+
+The Trend Stationary model (TS) is designed as $X_{t} = \alpha + \mu t + Y_{t}$ where we conduct regression to obtain an estimate of the error term $Y_{t}$. With respect to the Trend Stationary model,$Y_{t}$ is percieved as the difference between the raw economic time series $W_{1t}$ and its long-run trend. When the regression was conducted our estimate for $\mu$ was $\hat\mu = 0.008263$, this indicates the quarterly growth rate for the GDP. As a result, the annual growth rate can be displayed as 
+\begin{center} $\hat\mu \times 4 = 0.008263 \times 4 = 0.0331$ \end{center}
+Which implies our annual growth rate is 3.3%. We notice that the $76^{th}$ index has $Y_{t} \approx 0.1$ which indicates that in the late 1970's the GDP was 10% above its long-run value. We also notice that subsequently after the late 1970's there was a sharp drop in the early 1980's. This is correspondes to the actual Canadian economy in the 1970's. Canada was experiencing robust growth since the end of Word War II up until in the late 1970's. Subsequently Canada's economy began to sturggle, as many major powers started to battle inflation in the early 1980's. 
+
+```{r, echo=FALSE}
+plot(Ytds, type = "l", main = bquote('Difference Stationary Measure of the Business Y'['t']))
+```
+
+The Difference Stationary (DS) model is designed as $\Delta X_{t} = \mu + Y_{t}$ and similar to the Trend Stationary model, we use regression to estimate $Y_{t}$. In this model, we interpret $Y_{t}$ as the deviation of the actual growth rate $\Delta X_{t}$ from the average growth rate $\mu$. In our regression, we obtain $\hat\mu = 0.0089863$ which is our estimated average quarterly growth rate. Thus 
+\begin{center} $\hat\mu \times 4 = 0.036$ \end{center}
+This implies that the estimated average annual growth rate is 3.6%. This value is very close to the annual growth rate we calculated in the Trend Stationary Model. Notice in the $11^{th}$ index we see $Y_t \approx 0.02$ which means that the GDP grew 2 percentage points more than the average. Thus, in the early 1960's the economy grew at around 2.9%. In addition, we notice during the $85^{th}$ index that $Y_t \approx -0.02$ which implies that GDP growth decreased in the 1980's as it was growing 2 percentage points less than the average. Thus, in the early 1980's the GDP decreased by around 1%. 
+
+# Question 3
+
+```{r, include=FALSE}
+## function for BIC
+BIC <- function(res, k, N){
+  bic <- log(sum(res^2) / N)
+  bic <- bic + log(N) * k / N
+  bic
+}
+## obtaining the aic and bic for DS
+bic.array2 <- rep(NA, 9)
+Nd <- length(Ytds)
+for (ii in 0:8){
+  model.arima <- arima(Ytds, order = c(ii, 0, 0))
+  res.arima <- model.arima$residuals
+  bic.array2[ii + 1] <- BIC(res.arima, ii, Nd)
+}
+which(bic.array2 == min(bic.array2))
+
+## obtaining the aic and bic for TS
+bic.array <- rep(NA, 9)
+N <- length(Ytts)
+for (ii in 0:8){
+  model.arima <- arima(Ytts, order = c(ii, 0, 0))
+  res.arima <- model.arima$residuals
+  bic.array[ii + 1] <- BIC(res.arima, ii, N)
+}
+which(bic.array == min(bic.array))
+
+## Fitting it to the model for TS 
+model.ar2 <- lm(Ytts[-(1:2)]~Ytts[-c(1, N)] + Ytts[-((N-1):N)] - 1)
+summary(model.ar2)
+sigma2.hat <- sum(model.ar2$residuals^2) / (N-2)
+sigma.hat <- sigma2.hat^0.5
+
+## Fitting it to the midel for DS 
+model.ar2ds <- lm(Ytds[-(1:2)]~Ytds[-c(1, Nd)] + Ytds[-((Nd-1):Nd)] - 1)
+summary(model.ar2ds)
+sigma2.hatds <- sum(model.ar2ds$residuals^2) / (Nd-2) 
+sigma.hatds <- sigma2.hatds^0.5
+library(xtable)
+library(knitr)
+```
+
+Using the Bayesian Information Criterion for $k = 0,..,6$ 
+\begin{center} $BIC(k) = ln(\hat\sigma_{k}^2) = \frac{ln(N) \times k}{k}$ \end{center}
+
+where N is the sample size for of our dataset,for TS $N = 185$ and DS $N = 184$. We obtain the following table 
+
+```{r echo=FALSE}
+bicdf <- data.frame(bic.array[1:7],bic.array2[1:7])
+rownames(bicdf) <- c("$k=0$","$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$")
+colnames(bicdf) <- c("$BIC(k)_{TS}$", "$BIC(k)_{DS}$")
+kable(bicdf)
+```
+
+Here we see that for the TS model the $k$ that minimizes the $BIC$ is $k=2$ and the $k$ that minimizes the $BIC$ for the DS model is $k=1$. Given the restrictions on this project we claim that ideal Autoregressive model for both TS and DS models is an $AR(2)$. 
+
+
+We fit the TS and DS model to an AR(2) by running a regression on their respective $Y_{t}$ 
+\begin {center} $Y_{t} = \phi_{1} Y_{t-1} + \phi_{2} Y_{t-2}$ \end{center}
+
+The TS model yielded the following regression results 
+\begin {center} $\textstyle Y_{t}\atop t$ $=$ $\textstyle 1.290\atop(18.43)$ $Y_{t-1} -$ $\textstyle 0.313\atop(-4.57)$ $Y_{t-2} + a_t$   
+
+
+$n = 185, F-ratio = 5355,$ $RSS =$ `r round(sum(model.ar2$residuals^2), digit = 4)`, $R^{2} = 0.9834$
+\end {center}
+
+The DS model yielded the following regression results 
+\begin {center} 
+$\textstyle Y_{t}\atop t$ $=$ $\textstyle 0.297\atop(3.99)$ $Y_{t-1} +$ $\textstyle 0.057\atop(0.78)$ $Y_{t-2} + a_t$
+
+$n = 184, F-ratio = 10.45,$ $RSS =$ `r round(sum(model.ar2ds$residuals^2), digit = 4)`, $R^{2} = 0.104$
+\end {center}
+
+```{r include=FALSE}
+Phi1 <- 1.28986 
+Phi2 <- -0.31314 
+Phiv <- c(Phi1, Phi2)
+
+rhofullv <- acf(Ytts)$acf
+rhov <- rhofullv[1:7]
+gamma0 <- sigma2.hat / (1 - Phi1*rhov[2] - Phi2*rhov[3])
+sqrt(gamma0)
+
+psi1 <- Phi1*1
+psi2 <- Phi1*psi1 + Phi2*1
+psi3 <- Phi1*psi2 + Phi2*psi1
+psi4 <- Phi1*psi3 + Phi2*psi2
+psi5 <- Phi1*psi4 + Phi2*psi3
+psi6 <- Phi1*psi5 + Phi2*psi4
+psi7 <- Phi1*psi6 + Phi2*psi5
+psiv <- c(1,psi1,psi2,psi3,psi4,psi5,psi6)
+
+#DS 
+rhofullvds <- acf(Ytds)$acf
+rhovds <- rhofullvds[1:7]
+phi1ds <- 0.29695
+phi2ds <- 0.05743
+psi1ds <- phi1ds*1
+psi2ds <- phi1ds *psi1ds + phi2ds*1
+psi3ds <- phi1ds*psi2ds + phi2ds*psi1ds
+psi4ds <- phi1ds*psi3ds + phi2ds*psi2ds
+psi5ds <- phi1ds*psi4ds + phi2ds*psi3ds
+psi6ds <- phi1ds*psi5ds + phi2ds*psi4ds
+psi7ds <- phi1ds*psi6ds + phi2ds*psi5ds
+psivds <- c(1,psi1ds,psi2ds,psi3ds,psi4ds,psi5ds,psi6ds,psi7ds)
+```
+
+For the estimated TS model, we want to find $\gamma(0)^{\frac{1}{2}}$. We use the following equation: 
+
+\begin{center} $\gamma(0)^{\frac{1}{2}} = \frac{\sigma}{\sqrt{1 - \phi_{1}\rho(1)-\phi_{2}\rho(2)}}$ \end{center}
+
+Where we use $\hat\sigma^2 = \sqrt{\frac{RSS}{N-2}}$ as an estimate for $\sigma^2$, since we are using an $AR(2)$ model and our effective sample size is $N-2$. The $\phi_{1}$ and $\phi_{2}$ values can be substituted with the estimated coefficents from our intial regression ($\hat\phi_{1},\hat\phi_{2}$). In addition, we use a recursive formula to calculate the autocorrelation 
+
+\begin{center} $\rho(k) = \hat\phi_{1} \rho(k-1) + \hat\phi_{2} \rho(k-2)$
+\end{center}
+
+Where $\rho(0)= 1$ and $\rho(-k)= \rho(k)$ 
+The recursive calculations provide the following results: $\rho(1) =$ `r round(rhov[2], digit = 3)` and $\rho(2) =$ `r round(rhov[3], digit = 3)`. Thus, we can calculate $\gamma(0)^{\frac{1}{2}}$ as: 
+$$
+\begin{aligned} 
+\gamma(0)^{\frac{1}{2}} &= \frac{0.008}{\sqrt{1 - (1.290)(0.966) - (-0.313)(0.929)}}\\ 
+\gamma(0)^{\frac{1}{2}} &= 0.038
+\end{aligned}
+$$
+
+Similar to the Autocorrelation function we use a recursive function to determine the infinte moving averages $\psi_k$. 
+
+\begin{center}
+$\psi_k = \hat\phi_{1} \psi_{k-1} + \hat\phi_{2} \psi_{k-2}$
+\end{center}
+
+Where $\hat\phi_{1}, \hat\phi_{2}$ are the coefficents we determined from our TS regression. In addition the following conditions hold 
+
+\begin{center}
+$\psi_{0} = 1$ and $\psi_{k} = 0$ for $k<0$ 
+\end{center}
+
+Using the recursive functions for both the Autocorrelation function and the Infinite Moving Averages for $k = 0, \dots , 6$ we get the following table: 
+```{r echo=FALSE}
+df <- data.frame(round(psiv, digit = 4), round(rhov, digit = 4))
+rownames(df) <- c("$k=0$","$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$")
+colnames(df) <- c("$\\psi_k$", "$\\rho(k)$")
+kable(df)
+```
+
+#Question 4
+
+Due to the nature of the model forecasting growth rates $\Delta X_{t+k}$ for DS models are simple. Recall that a DS model has the following expression
+
+\begin{center}
+$\Delta X_{t} = \mu + Y_{t}$ 
+\end{center}
+
+Thus, if we were to obtain a forecast into $k$ periods forward we have the following expression 
+\begin{center}
+$E_{t}[\Delta X_{t+k}] = \mu + E_{t}[Y_{t+k}]$  
+\end{center}
+
+To determine $E_{t}[Y_{t+k}]$ we use the following recursive formula 
+\begin{center}
+$E_{t}[Y_{t+k}] = \hat\phi_{1} E_{t}[Y_{t+k-1}] + \hat\phi_{2} E_{t}[Y_{t+k-2}]$
+\end{center}
+Where $\hat\phi_{1}, \hat\phi_{2}$ are the coefficents we estimated from the DS regression we conducted in question 3. 
+
+In addition, to determine the confidence intervals of these forecasts, we need to determine the variance of the forecasts.This is given by: 
+\begin{center}
+$Var_{t}[\Delta X_{t+k}] = Var_{t}[Y_{t+k}]$
+\end{center}
+
+To determine the Variance of $Y_{t+k}$ we use infinte moving averages $\psi_k$ and the estimated sigma squared $\hat\sigma^2$. 
+\begin{center}
+$Var_{t}[Y_{t+k}] = \sigma^2 \sum_{j=0}^{k-1} \psi^2_{j}$
+\end{center} 
+
+Note, we use the same recursive formula to find the infinite moving averages $\hat\psi_k$ for the DS model that we used in Question 3 for the TS model. However, we use DS estimated $\phi$ values. 
+\begin{center}
+$\psi_k = 0.297 \psi_{k-1} + 0.057 \psi_{k-2}$
+\end{center}
+
+Therefore our 95% confidence interval for $\Delta X_{t+k}$ is 
+$$
+\begin{aligned} 
+E[\Delta X_{t+k}] & \pm 2 \times \sqrt{Var_{t}[\Delta X_{t+k}]} \\ 
+(\mu + E_{t}[Y_{t+k}]) & \pm 2 \times \sqrt{\sigma^2 \sum_{j=0}^{k-1} \psi^2_{j}}
+\end{aligned}
+$$
+
+For the TS model, the growth rate forecasts are not as simple. 
+
+Recall that the TS model has the following representation 
+
+\begin{center}
+$X_{t} = \alpha +\mu t + Y_t$
+\end{center}
+
+Thus, we have 
+
+\begin{center}
+$\Delta X_{t+k} = \mu + Y_{t+k} - Y_{t+k-1}$
+\end{center}\
+
+And
+
+\begin{center}
+$E_{t}[\Delta X_{t+k}] = \mu + E_{t}[Y_{t+k}] - E_{t}[Y_{t+k-1}]$
+\end{center}
+
+Similar to the DS model the forecasts for the $Y_{t+k}$ values follows a recursive formula.
+
+\begin{center}
+$E_{t}[Y_{t+k}] = \hat\phi_{1} E_{t}[Y_{t+k-1}] + \hat\phi_{2} E_{t}[Y_{t+k-2}]$
+\end{center}
+
+Where the $\hat\phi$'s are the estimated coefficents from the TS regressed model in Question 3. 
+
+In order to obtain the confidence intervals we need to determine the variance of the growth rate forecasts. Similar to the DS model we will need the TS estimated sigma squared $\hat\sigma^2$ and the TS estimated value for the infinite moving averages. 
+
+$$
+\begin{aligned}
+Var_{t}[\Delta X_{t+k}] &= Var_{t}[Y_{t+k} - Y_{t+k-1}] \\
+Var_{t}[\Delta X_{t+k}] &= \sigma^2(1 + \sum_{j=0}^{k-1} (\psi_{j} - \psi_{j-1})^2)
+\end{aligned}
+$$
+
+Therefore our 95% confidence interval is 
+
+$$
+\begin{aligned} 
+E[\Delta X_{t+k}] & \pm 2 \times \sqrt{Var_{t}[\Delta X_{t+k}]} \\ 
+(\mu + E_{t}[Y_{t+k}] - E_{t}[Y_{t+k-1}]) & \pm 2 \times \sqrt{\sigma^2(1 + \sum_{j=0}^{k-1} (\psi_{j} - \psi_{j-1})^2)}
+\end{aligned} 
+$$
+
+Using the outlined process, we obtain the following tables for DS and TS models. 
+
+```{r echo=FALSE}
+#DS
+expytds <- c(Ytds[184])
+for (i in 1:8)
+{
+  Ytds[184+i] = phi1ds*Ytds[184+i-1] +phi2ds*Ytds[184+i-2]
+  expytds <- c(expytds,Ytds[184+i])
+}
+Expgrds <- c()
+for (i in 1:9)
+{
+  Expgrds[i] <- muhat + expytds[i]
+}
+Var1ds <- sigma2.hatds
+Var2ds <- sigma2.hatds*(1 + psi1ds^2)
+Var3ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2)
+Var4ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2 + psi3ds^2)
+Var5ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2 + psi3ds^2 + psi4ds^2)
+Var6ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2 + psi3ds^2 + psi4ds^2 + psi5ds^2)
+Var7ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2 + psi3ds^2 + psi4ds^2 + psi5ds^2 + psi6ds^2)
+Var8ds <- sigma2.hatds*(1 + psi1ds^2 + psi2ds^2 + psi3ds^2 + psi4ds^2 + psi5ds^2 + psi6ds^2 + psi7ds^2)
+Vards <- c(0,Var1ds,Var2ds,Var3ds,Var4ds,Var5ds,Var6ds,Var7ds,Var8ds)
+cidsl <- c()
+for (i in 1:9)
+{
+  cidsl[i] <- Expgrds[i] - 2*sqrt(Vards[i]) 
+}
+cidsu <- c()
+for (i in 1:9)
+{
+  cidsu[i] <- Expgrds[i] + 2*sqrt(Vards[i]) 
+}
+
+#TS 
+expytv <- c(Ytts[185])
+for (i in 1:8)
+{
+  Ytts[185+i] = Phi1*Ytts[185+i-1] +Phi2*Ytts[185+i-2]
+  expytv <- c(expytv,Ytts[185+i])
+}
+
+expgrts <- c()
+for (i in 1:9)
+{
+  expgrts[i] <- muts + Ytts[184+i] - Ytts[184+i-1]
+}
+
+Var1 <- sigma2.hat 
+Var2 <- sigma2.hat*(1 + (psi1-1)^2)
+Var3 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2)
+Var4 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2 + (psi3 - psi2)^2)
+Var5 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2 + (psi3 - psi2)^2 + (psi4 - psi3)^2)
+Var6 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2 + (psi3 - psi2)^2 + (psi4 - psi3)^2 + (psi5 - psi4)^2)
+Var7 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2 + (psi3 - psi2)^2 + (psi4 - psi3)^2 + (psi5 - psi4)^2 + (psi6 - psi5)^2)
+Var8 <- sigma2.hat*(1 + (psi1-1)^2 + (psi2 - psi1)^2 + (psi3 - psi2)^2 + (psi4 - psi3)^2 + (psi5 - psi4)^2 + (psi6 - psi5)^2 + (psi7 - psi6)^2)
+varv <- c(0,Var1,Var2,Var3,Var4,Var5,Var6,Var7,Var8)
+
+citsl <- c()
+for (i in 1:9)
+{
+  citsl[i] <- expgrts[i] - 2*sqrt(varv[i]) 
+}
+
+citsu <- c()
+for (i in 1:9)
+{
+  citsu[i] <- expgrts[i] + 2*sqrt(varv[i]) 
+}
+```
+
+DS Forecasts with 95% Confidence Intervals
+
+```{r echo=FALSE}
+grds <- data.frame(round(Expgrds , digit = 6),round(cidsl, digit = 6),round(cidsu, digit = 6))
+rownames(grds) <- c("$k=0$","$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$","$k=7$","$k=8$")
+colnames(grds) <- c("$E[\\Delta X_{t+k}]$", "$Lower CI$", "$Upper CI$")
+kable(grds)
+```
+
+
+```{r echo=FALSE}
+DS.lim = range(cidsl, cidsu)
+plot(Expgrds, type = "l", ylim = DS.lim,main = "Forecasted Values for a DS Model with CI's", xlab = "k", ylab = "Forecasted Growth Rates" ,sub = "Figure 1: The Black line is our forecast, the blue line is the lower bounds CI and the red line is the upper bounds CI", cex.sub = 0.6)
+par(new = TRUE) 
+plot(cidsl, type = "l", xlab = "", yaxt = "n",ylim = DS.lim, col = "blue", ylab = "")
+par(new = TRUE)
+plot(cidsu, type = "l", xlab = "", yaxt = "n",ylim = DS.lim, col = "red", ylab = "")
+```
+
+TS Forecasts with 95% Confidence Intervals
+
+```{r echo=FALSE}
+grts <- data.frame(round(expgrts, digit = 6),round(citsl, digit = 6),round(citsu, digit = 6))
+rownames(grts) <- c("$k=0$","$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$","$k=7$","$k=8$")
+colnames(grts) <- c("$E[\\Delta X_{t+k}]$", "$Lower CI$", "$Upper CI$")
+kable(grts)
+```
+
+
+```{r echo=FALSE}
+TS.lim = range(citsl, citsu)
+plot(expgrts, type = "l", ylim = TS.lim,main = "Forecasted Values for a TS Model with CI's", xlab = "k", ylab = "Forecasted Growth Rates" ,sub = "Figure 2: The Black line is our forecast, the blue line is the lower bounds CI and the red line is the upper bounds CI", cex.sub = 0.6)
+par(new = TRUE) 
+plot(citsl, type = "l", xlab = "", yaxt = "n",ylim = TS.lim, col = "blue", ylab = "")
+par(new = TRUE)
+plot(citsu, type = "l", xlab = "", yaxt = "n",ylim = TS.lim, col = "red", ylab = "")
+```
+
+# Question 5
+
+In the Dickey - Fuller test the following Hypothesis test occurs: 
+
+\begin{center}
+$H_{0}$: $X_t$ is Difference Stationary \\
+$H_{1}$: $X_t$ is not Difference Stationary 
+\end{center}
+
+```{r include=FALSE}
+library(tseries)
+XtNA <- Xt[!is.na(Xt)]
+adf.test(XtNA,k=5)
+```
+using the code explained in the Exhibit (Question 5) we have the following results from this hypothesis. 
+\begin{center}
+Statistic $= -2.6929$ \\
+P-value $ = 0.2865$  
+\end{center}
+This implies that we should not reject $H_0$ and presume the series $X_t$ is associated with a Difference Stationary Model. 
+
+# Question 6
+To determine certain characterisitcs of the DS and TS models we use a Box-Jenkins identification. This involves using the autocorrelation function $\rho(k)$ and partial autocorrelation $\phi_{kk}$ to determine if the respective $Y_t$'s follow an $AR(p)$ or and $MA(q)$. 
+```{r include=FALSE}
+Ytts <- tsmodel$residuals
+Ytds <- dsmodel$residuals
+## TS Model 
+N <- length(Ytts)
+phi_11 = rhov[2]
+
+modelT2 <- lm(Ytts[-(1:2)] ~ Ytts[-c(1,N)] + Ytts[-((N-1):N)] - 1)
+phi_22 <- as.numeric(modelT2$coef)[2]
+
+modelT3 <- lm(Ytts[-(1:3)] ~ Ytts[-c(1:2,N)] + Ytts[-c(1, (N-1):N)] + Ytts[-((N-2):N)] - 1)
+phi_33 <- as.numeric(modelT3$coef)[3]  
+
+modelT4 <- lm(Ytts[-(1:4)] ~ Ytts[-c(1:3,N)] + Ytts[-c((1:2), (N-1):N)] + Ytts[-c(1, (N-2):N)] + Ytts[-((N-3):N)] - 1)
+phi_44 <- as.numeric(modelT4$coef)[4]  
+
+modelT5 <- lm(Ytts[-(1:5)] ~ Ytts[-c(1:4,N)] + Ytts[-c((1:3), (N-1):N)] + Ytts[-c(1:2, (N-2):N)] + Ytts[-c(1, (N-3):N)] + Ytts[-((N-4) : N)] - 1)
+phi_55 <- as.numeric(modelT5$coef)[5]  
+
+modelT6 <- lm(Ytts[-(1:6)] ~ Ytts[-c(1:5,N)] + Ytts[-c((1:4), (N-1):N)] + Ytts[-c(1:3, (N-2):N)] + Ytts[-c(1:2, (N-3):N)] + Ytts[-c(1, (N-4) : N)] + Ytts[-((N-5) : N)] - 1)
+phi_66 <- as.numeric(modelT6$coef)[6]  
+
+Significance_test = 2* 1/(185)^(0.5)
+Sig_test = 0.1470429
+## We realize it's an AR(2) like before
+
+## DS
+N <- length(Ytds)
+phi11ds = rhovds[2]
+
+modelD2 <- lm(Ytds[-(1:2)] ~ Ytds[-c(1,N)] + Ytds[-((N-1):N)] - 1)
+phi22ds <- as.numeric(modelD2$coef)[2]
+
+modelD3 <- lm(Ytds[-(1:3)] ~ Ytds[-c(1:2,N)] + Ytds[-c(1, (N-1):N)] + Ytds[-((N-2):N)] - 1)
+phi33ds <- as.numeric(modelD3$coef)[3]  
+
+modelD4 <- lm(Ytds[-(1:4)] ~ Ytds[-c(1:3,N)] + Ytds[-c((1:2), (N-1):N)] + Ytds[-c(1, (N-2):N)] + Ytds[-((N-3):N)] - 1)
+phi44ds <- as.numeric(modelD4$coef)[4]  
+
+modelD5 <- lm(Ytds[-(1:5)] ~ Ytds[-c(1:4,N)] + Ytds[-c((1:3), (N-1):N)] + Ytds[-c(1:2, (N-2):N)] + Ytds[-c(1, (N-3):N)] + Ytds[-((N-4) : N)] - 1)
+phi55ds <- as.numeric(modelD5$coef)[5]  
+
+modelD6 <- lm(Ytds[-(1:6)] ~ Ytds[-c(1:5,N)] + Ytds[-c((1:4), (N-1):N)] + Ytds[-c(1:3, (N-2):N)] + Ytds[-c(1:2, (N-3):N)] + Ytds[-c(1, (N-4) : N)] + Ytds[-((N-5) : N)] - 1)
+phi66ds <- as.numeric(modelD6$coef)[6]
+
+Significance_testD = 2* 1/(184)^(0.5)
+Sig_testD = 0.147442
+## AR(1)
+model.ar1 <- lm(Ytds[-(1)]~Ytds[-Nd] - 1)
+## MA(1) 
+model.ma1 <- arima(Ytds, order = c(0, 0, 1), include.mean = FALSE)
+```
+
+The following table shows the values from the TS's autocorrelation and partial autocorrelation functions. 
+```{r echo=FALSE}
+pacts <- c(phi_11,phi_22,phi_33,phi_44,phi_55,phi_66)
+patable <- data.frame(round(rhov[2:7], digit = 4),round(pacts, digit = 4))
+rownames(patable) <- c("$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$")
+colnames(patable) <- c("$\\rho(k)$", "$\\phi_{kk}$")
+kable(t(patable))
+```
+
+To determine a cutoff point for these values we determine where the correlation values exceed in absolute terms 
+
+\begin{center}
+$2 \times \frac{1}{\sqrt{T_{TS}}} = 2 \times \frac{1}{\sqrt{185}} = 0.1470$  
+\end{center}
+
+Therefore we can see that $\phi_{kk}$ has a cutoff value at $k = 2$ as it is the last point where  $|\phi_{kk}| > 0.1470$. In addition, it does not seem that $\rho(k)$ has a cut-off point and is demonstrating characterisitics of a damped exponential.Thus by Box-Jenkins properties we can claim that the $Y_{t}$ appears to be an $AR(2)$, exactly what we estimated in Question 3.  
+
+The following table shows the values from the DS's autocorrelation and partial autocorrelation functions. 
+```{r echo=FALSE}
+pacds <- c(phi11ds,phi22ds,phi33ds,phi44ds,phi55ds,phi66ds)
+patableds <- data.frame(round(rhovds[2:7], digits = 4), round(pacds, digit =4))
+rownames(patableds) <- c("$k=1$", "$k=2$", "$k=3$", "$k=4$", "$k=5$", "$k=6$")
+colnames(patableds) <- c("$\\rho(k)$", "$\\phi_{kk}$")
+kable(t(patableds))
+```
+
+Similar to what we did with the TS model, we determine a specific value that can act as the cut-off point for the autocorrelation and partial autocorrelation function. 
+
+\begin{center}
+$2 \times \frac{1}{\sqrt{T_{DS}}} = 2 \times \frac{1}{\sqrt{184}} = 0.1474$
+\end{center}
+
+Based on this cut-off we see that the DS model can be associated with an $AR(1)$ model as $k=1$ is the last value where $|\phi_{kk}| > 0.1474$. In addition, we can claim that the DS model can be associated with an $MA(3)$ as $k=3$ is the last value where $|\rho(k)| > 0.1474$. However, based on the restrictions with this project we will assume that the DS model is associated with an $AR(1)$ and a $MA(1)$.
+
+
+```{r echo=FALSE}
+#TS Residuals 
+atts <- model.ar2$residuals
+ztts <- atts / sigma.hat
+plot(ztts, type = "l", main = "Plot of TS: AR(2) Standardized Residuals")
+```
+
+
+This plot displays that a majority of the values are between -2 and 2. Using the following standards from the Gaussian Law we can claim that the standardized residuals of the $AR(2)$ fit for the TS model follows a Normal Distribution. 
+\begin{center}
+$|\hat z_{t}| > 2$ has 11 observations \\
+$|\hat z_{t}| > 3$ has 1 observation \\
+$|\hat z_{t}| > 4$ has 0 ovservations 
+\end{center}
+
+
+```{r, include=FALSE}
+#DS Residuals 
+summary(modelD2)
+maat <- model.ma1$residuals
+arat <- model.ar1$residuals
+sigma2.hatmads <- sum(model.ma1$residuals^2) / (Nd-1)
+sigma2.hatards <- sum(model.ar1$residuals^2) / (Nd-1)
+sigma.hatmads <- sigma2.hatmads^0.5
+sigma.hatards <- sigma2.hatards^0.5
+maztds <- maat / sigma.hatmads
+arztds <- arat / sigma.hatards
+```
+
+
+```{r echo=FALSE}
+plot(arztds, type = "l", main = "Plot of DS: AR(1) Standardized Residuals")
+```
+
+
+Similar to the AR(2) from the TS model, this plot demonstrates that a majority of the standardized residuals lie between -2 and 2. The following shows that the AR(1) model does not contain many outliers and therefore, by Gaussian Law standards we can claim normailty for this model. 
+\begin{center}
+$|\hat z_{t}| > 2$ has 9 observations \\
+$|\hat z_{t}| > 3$ has 1 observation \\
+$|\hat z_{t}| > 4$ has 0 ovservations 
+\end{center}
+
+
+```{r echo=FALSE}
+plot(maztds, type = "l", main = "Plot of DS: MA(1) Standardized Residuals")
+```
+
+
+Similar to the previous 2 plots the $MA(1)$ model has standardized Residuals that lie between -2 and 2. The following Gaussian Law standards shows that outliers are limited in this model. As a result, we can claim normality for the $MA(1)$ model. 
+
+\begin{center}
+$|\hat z_{t}| > 2$ has 9 observations \\
+$|\hat z_{t}| > 3$ has 1 observation \\
+$|\hat z_{t}| > 4$ has 0 ovservations 
+\end{center}
+
+# Test for Serial Correlation 
+
+The test for Serial Correlation is also considered a test for independence between residual values for our models. This implies that if our models are correct then the residuals $a_t$ should be independent of $a_{t+k}$ for all $k \neq 0$. Therefore we would like to see our autocorrelation fuction to satisfy. 
+\begin{center}
+$\rho_{a}(k) \equiv \frac{E[a_{t} a_{t+k}]}{\sigma^2}$
+\end{center} 
+
+We then use our estimates from each model to determine an estimated autocorrelation function. Which can apply for all of our models. 
+\begin{center}
+$\hat\rho_{a}(k) \equiv \frac{\sum_{t=1}^{T-|k|} \hat a_{t} \hat a_{t+k}]}{\sum_{t=1}^{T} \hat a_{t}^2}$
+\end{center} 
+
+Now we introduce the Box-Piece Test where under the null hypothesis we have: 
+\begin{center}
+$H_{0}: \rho_{a}(k) = 0$ 
+\end{center}
+Where $k = 1,2, \dots , M$ where we can define $M \approx \sqrt{T}$ Because the T value is close for both TS and DS model we can round down. 
+
+\begin{center}
+$M \approx \sqrt{T} = \sqrt{185} \approx \sqrt{184} \approx 10$. 
+\end{center}
+
+Therefore we use the following statistic 
+\begin{center}
+$Q = T \times (\hat\rho_{\hat a}(1) + \dots + \hat\rho_{\hat a}(10))$ $\sim$ $\chi^2_{10}$ 
+\end{center}
+
+Using the following process we obtain the following important values for all of our models 
+
+
+```{r, include=FALSE}
+# Box Tests 
+Box.test(atts, type = "Box-Pierce",lag=10)
+Box.test(maat, type = "Box-Pierce",lag = 10)
+Box.test(arat, type = "Box-Pierce",lag = 10)
+TSbox <- c(17.517, 0.064)
+DSmabox <- c(19.018, 0.040)
+DSarbox <- c(17.502, 0.064)
+```
+
+```{r, echo=FALSE}
+Boxta<-data.frame(TSbox,DSmabox,DSarbox)
+rownames(Boxta) <- c("Test Statistic", "p-value")
+colnames(Boxta) <- c("TS: $AR(2)$", "DS: $MA(1)$", "DS: $AR(1)$")
+kable(Boxta)
+```
+
+By looking at this table we can determine what models satisfy the null hypothesis. 
+
+We see that for the TS model with an $AR(2)$ fit, the statistic is less than the  5% critical value $\chi^2_{10} = 18.3$. Thus, we can say that the $AR(2)$ passes the diagnostic test as the null hypothesis is accepted. 
+
+The DS model with an $MA(1)$ fit, has a statistic that is greater than the 5% critical value $\chi^2_{10} = 18.3$. As a result, we reject the null hypthosis and claim that the $MA(1)$ model does not pass this diagnostic test. 
+
+The DS model with an $AR(1)$ fit, has a statstic that is less than the 5% crtical value $\chi^2_{10} = 18.3$. As a result, we accpet the null hypothesis and claim that the $AR(1)$ model passes this diagnostic test
+
+
+# Test for Overfitting
+
+This test allows us to determine if we have fit a correct $AR(p)$ or a $MA(q)$ to our model. For example an $AR(2)$ will have the following representation: 
+\begin{center}
+$Y_t = \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + a_t$ 
+\end{center}
+Thus AR(2+4) can be represented as  
+\begin{center}
+$Y_t = \phi_1 Y_{t-1} + \phi_2 Y_{2} + \phi_{3}Y_{t-3} + \dots + \phi_{6}Y_{t-6} + a_t$ 
+\end{center}
+where we have 4 added terms. 
+
+Under the null hypothesis we have 
+\begin{center}
+$H_0: \phi_3 = \dots = \phi_6 = 0$. 
+\end{center}
+This null hypothesis will give us the following test statistic
+\begin{center} 
+$\Lambda = T \times ln (\frac{\hat\sigma_{2}^2}{\hat\sigma_{6}^2}) \sim \chi^2_{4}$
+\end{center}
+
+Where $\hat\sigma_{2}^2$ is the estimated sigma squared for an $AR(2)$ and $\hat\sigma_{6}^2$ is the estimated sigma squared for an $AR(6)$. 
+
+Note the same process can be used for MA(1) and AR(1) models. Using this process for the TS and DS models, we get the following results. 
+
+```{r echo=FALSE}
+# Overfitting Test for TS : (AR(2)) where r = 4
+ar6sigma2.hat <- sum(modelT6$residuals^2) / (N-6)
+lambda1 <- 185*log(sigma2.hat /ar6sigma2.hat)
+#accept 
+
+# Overfitting Test for DS: AR(1)
+ar5sigma2.hat <- sum(modelD5$residuals^2) / (N-5)
+lambda2 <- 184*log(sigma2.hatards /ar5sigma2.hat)
+
+# Overfitting Test for DS: MA(1)
+model.ma5 <- arima(Ytds, order = c(0,0,5), include.mean = FALSE)
+ma5sigma.hat <- sum(model.ma5$residuals^2) / (N-5)
+lambda3 <- 184*log(sigma2.hatmads / ma5sigma.hat) / (N-5)
+
+Lambdata <- data.frame(round(lambda1,digit = 4),round(lambda2,digit = 4),round(lambda3,digit = 4))
+rownames(Lambdata) <- c("Test Statistic")
+colnames(Lambdata) <- c("TS: $AR(2)$", "DS: $MA(1)$", "DS: $AR(1)$")
+kable(Lambdata)
+```
+
+For the TS $AR(2)$ model we have that its test statistic $\Lambda$ is less than the corresponding critical value $\chi^2_4 = 9.49$. Thus we accept $H_0$, that there is evidence for $AR(2)$ being the correct model. 
+
+The DS $MA(1)$ model has test statistic $\Lambda$ that is less than the corresponding critical value $\chi^2_4 = 9.49$. Thus we accept $H_0$, that there is evidence for $MA(1)$ being the correct model. 
+
+The DS $AR(1)$ model has test statistic $\Lambda$ that is less than the corresponding critical value $\chi^2_4 = 9.49$. Thus we accept $H_0$, that there is evidence for $AR(1)$ being the correct model. 
+
+# Jacrque-Bera test 
+
+This is another test in normality as we can use the estimated standardized residuals from each model to determine the respective model's skewness and kurtosis. 
+\begin{center}
+$\hat\kappa_3 = \frac{1}{T} \sum_{t=1}^T z_t^3$ and $\hat\kappa_4 = \frac{1}{T} \sum_{t=1}^T z_t^4$
+\end{center}
+
+In addition we have a hypothesis test with the following conditions 
+\begin{center}
+$H_0: \kappa_3 = 0, \kappa_4 = 3$
+\end{center}
+and the following test statistic 
+\begin{center}
+$JB = T(\frac{\hat\kappa_{3}^2}{6} + \frac{(\hat\kappa_{4} - 3)^2}{24}) \sim \chi_2^2$
+\end{center}
+
+Using this process for all the available models, we have the following results. 
+```{r echo=FALSE}
+# Skewness and Kurtosis for TS: AR(1)
+k3ts <- sum(ztts^3) / 185 
+k4ts <- sum(ztts^4) / 185
+# jb test
+jbts <- 185*((k3ts^2/ 6) + ((k4ts-3)^2 / 24))
+jbtsar <- c(k3ts, k4ts, jbts)
+
+# Skewness and Kurtosis for DS: AR(1)
+k3ar <-  sum(arztds^3) / 184
+k4ar <-  sum(arztds^4) / 184
+# jb test
+jbar <-  184*((k3ar^2/ 6) + ((k4ar-3)^2 / 24))
+jbdsar <- c(k3ar,k4ar,jbar)
+## Skewness and Kurtosis for DS: AR(1)
+k3ma <- sum(maztds^3) / 184
+k4ma <- sum(maztds^4) / 184
+#test 
+jbma <- 184*((k3ma^2/ 6) + ((k4ma-3)^2 / 24))
+jbdsma <- c(k3ma,k4ma,jbma)
+
+jbtable <- data.frame(round(jbtsar,digit = 4),round(jbdsma,digit = 4),round(jbdsar,digit = 4))
+rownames(jbtable) <- c("Skewness", "Kurtosis", "Test Statistic")
+colnames(jbtable) <- c("TS: $AR(2)$", "DS: $MA(1)$", "DS: $AR(1)$")
+kable(jbtable)
+```
+
+In this scenario all statistics for each model follow a $\chi^2_2$, and the 5% level of the critical value of $\chi^2_2$ is 5.99. However, each of the model's JB statistic exceeded the critical value, as a result we claim that the AR(2) fit for the TS model, the MA(1) fit for the DS model and the AR(1) fit for the DS model do not showcase the characterstics of normality through the Jarque - Bera test. 
+
+```{r include = FALSE}
+# ARCH (6) for TS : AR(2)
+nar <- length(model.ar2$residuals)
+archts <- lm(model.ar2$residuals[-(1:6)] ~ model.ar2$residuals[-c(1:5, nar)] + model.ar2$residuals[-c(1:4,(nar-1):nar)] + model.ar2$residuals[-c(1:3,(nar-2):nar)] + model.ar2$residuals[-c(1:2,(nar-3):nar)] + model.ar2$residuals[-c(1,(nar-4):nar)] + model.ar2$residuals[-c((nar-5):nar)])
+archstat <- 185*summary(archts)$r.squared
+
+#ARCH (6) for DS: AR(1)
+nards <- length(model.ar1$residuals)
+archdsar1 <- lm(model.ar1$residuals[-(1:6)] ~ model.ar1$residuals[-c(1:5, nards)] + model.ar1$residuals[-c(1:4,(nards-1):nards)] + model.ar1$residuals[-c(1:3,(nards-2):nards)] + model.ar1$residuals[-c(1:2,(nards-3):nards)] + model.ar1$residuals[-c(1,(nards-4):nards)] + model.ar1$residuals[-c((nards-5):nards)])
+ar1stat <- 184*summary(archdsar1)$r.squared
+
+#ARCH(6) for DS: MA(1)
+nardsma <- length(model.ma1$residuals)
+archdsma1 <- lm(model.ma1$residuals[-(1:6)] ~ model.ma1$residuals[-c(1:5, nardsma)] + model.ma1$residuals[-c(1:4,(nardsma-1):nardsma)] + model.ma1$residuals[-c(1:3,(nardsma-2):nardsma)] + model.ma1$residuals[-c(1:2,(nardsma-3):nardsma)] + model.ma1$residuals[-c(1,(nardsma-4):nardsma)] + model.ma1$residuals[-c((nardsma-5):nardsma)])
+ma1stat <- 184*summary(archdsma1)$r.squared
+```
+
+#Test for non-linear dependence 
+The nature of the TS and DS means that we have been working with linear models. As a result, we have not tested for non-linear dependence with our various models. We define $ARCH(6)$ where we have 6 lagged values of a_{t}^2, the respective resiudals in each model. $ARCH(6)$ is represented as: 
+\begin{center}
+$a_t = z_t \times (\sigma^2 + \alpha_1 a_{t-1}^2 + \dots + \alpha_6 a_{t-6}^2)^\frac{1}{2}$ 
+\end{center}
+
+Our null hypothesis under the ARCH test would be 
+\begin{center}
+$H_0: a_1 = a_2 = \dots = a_6 = 0$
+\end{center}
+In order to use this for our various models we regress each model's respective $\hat a_t^2$ on a constant and their respective lagged residuals. We then get the $R^2$ in each regression to use the following test statistic under our null hypothesis. 
+
+\begin{center}
+$T \times R^2 \sim \chi^2_6$
+\end{center}
+
+We use this framwork to obtain test statistics for all of our TS and DS models
+
+```{r echo=FALSE}
+archta <- data.frame(archstat,ma1stat,ar1stat)
+rownames(archta) <- c("Test Statistic")
+colnames(archta) <- c("TS: $AR(2)$", "DS: $MA(1)$", "DS: $AR(1)$")
+kable(archta)
+```
+
+In this test each model's test statistic follows the same distribution $\chi^2_6$. The 5% critical value is 12.59. We can observe from the table above that each model's test statistic is less than 12.59. Therefore, for each model we accept $H_0$. Thus, through the $ARCH(6)$ test we can say that the AR(2) fit for the TS model, the MA(1) fir for the DS model and the AR(1) representation of the DS model, all can claim non-linear independence. 
+
+# Question 8
+Similar to question 2, we will linearize the raw time series data by taking the natural logarithim of the dataset. We then run regression by modelling it in the form that was given 
+\begin{center}
+$ln(P_t) = \delta + ln(P_{t-1}) + a_t$ where $a_t \sim i.i.N[0,\sigma^2]$
+\end{center}
+
+Again through the use of the Box-Pierce test we can utulize the autocorrelation function $\hat\rho_{a}(k)$ to determine if this model follows a random walk process. 
+
+Under the Null Hypothesis we have the following 
+\begin{center}
+$H_0: \hat\rho_{a}(1) = \dots =  \hat\rho_{a}(k) = 0$ where $k = 1, \dots , M$  
+\end{center}
+We also pick $M$ to be $M \approx \sqrt{T} = \sqrt{648} \approx 25$. 
+Thus, here are the results of the Box-Pierce Test. 
+
+```{r include=FALSE}
+Q8data <- read.csv("~/Documents/STAT 443/Project/S&P_data_for_Q8.csv")
+Pt <- as.numeric(as.character(Q8data$P))
+lpt <- log(Pt)
+Np <- length(lpt)
+pmodel <- lm(lpt[-(1)]~lpt[-Np])
+Box.test(pmodel$residuals, type = "Box-Pierce", lag = 25)
+## Reject the null hypothesis that autocorrelation is zero, so we say that the model does not follow a random walk 
+```
+
+```{r echo=FALSE}
+Boxp <- data.frame(c(21.702,0.065))
+rownames(Boxp) <- c("Test Statistic", "P-value")
+colnames(Boxp) <- c("$ln(P_{t})$")
+kable(Boxp)
+```
+
+As we can see, the critical value from this test is $Q = 21.7$ and the 5% critical value for $\chi^2_{25}$ is 37.65. As a result, we can accept the hypothesis that $\hat\rho_{a}(1) = \dots =  \hat\rho_{a}(k) = 0$. Therefore, we claim that this model does not follow a Random walk as we require $\hat\rho_{a}(k) = 1$ in order for this time series to resemble a random walk. 
+
+The tests for normality are similar to those conducted in question 6. We can plot the standardized residuals to determine the nature of outliers. 
+
+```{r echo=FALSE}
+# Normally Distributed 
+sigmap2.hat <- sum(pmodel$residuals^2) / (Np - 1)
+sigmap.hat <- sigmap2.hat^0.5
+ztp <- pmodel$residuals / sigmap.hat
+plot(ztp, type = "l" ,main = 'Plot of Pt standardized residuals')
+```
+
+Here we see that there are an abudnance of outliers and some of them are very large in magnitude. As a result, the characteristic of the plot displays that this model may not be following a Normal distribution. 
+
+However, let us try using the Jarque-Bera test where our null hypothesis is
+\begin{center}
+$H_0 = \kappa_3 = 0, \kappa_4 = 3$
+\end{center}
+
+Using the same framework we conducted in question 6 we gain the following results. 
+```{r echo=FALSE}
+Npr <- length(pmodel$residuals)
+k3p <- sum(ztp^3) / Npr
+k4p <- sum(ztp^4) / Npr
+jbp <- Np*((k3p^2 / 6) + ((k4p - 3)^2 / 24))
+jbptable <- data.frame(round(c(k3p,k4p,jbp) , digit = 4))
+rownames(jbptable) <- c("Skewness", "Kurtosis", "JB Statistic")
+colnames(jbptable) <- c("$ln(P_t)$")
+kable(jbptable)
+```
+
+We see that the statistic for this test is 552 which is absurdly larger than the 5% critical value for $\chi^2_2 = 5.99$. As a result, we reject $H_0$ which verifies our position with the plot of the standard residuals as we deny the notion that this model follows a Normal distribution. 
+
+Here are the first 15 values of the autocorrelation function for $a_t^2$. Using the acf function built into R we get the following results. 
+```{r  include=FALSE}
+# Autocorrelation 
+atsquared <- (pmodel$residuals)^2
+autofunction<- acf(atsquared)$acf[1:15]
+kv <- 1:length(autofunction)
+```
+
+
+```{r  echo=FALSE}
+autotable <- data.frame(kv,round(autofunction, digit = 4))
+colnames(autotable) <- c("$k$","$\\rho_{a}(k)$")
+kable(autotable)
+```
+
+
+Using the garchFit function from the built in R function we have the following results. 
+```{r include = FALSE}
+# GARSH(1,1)
+require(fGarch)
+garchFit(formula = ~garch(1, 1), data = pmodel$residuals)
+omega <- 9.4875e-05
+alpha1 <- 0.060716
+beta1 <- 0.88844
+stattest <- alpha1 + beta1
+```
+
+
+```{r echo= FALSE}
+gardf <- data.frame(c(omega,alpha1,beta1))
+rownames(gardf) <- c("$\\Omega$", "$\\alpha$", "$\\beta$")
+colnames(gardf) <- c("Estimates")
+kable(t(gardf))
+```
+
+Here we have Omega ($\Omega$) > 0, and Alpha ($\alpha$) , Beta ($Beta$) are non negative. In addition, $\alpha + \beta = 0.949 < 1$. Since all of these 3 conditions are satisfied we can claim that this model is stationary. 
+
+\newpage
+# Sources 
+
+1 . Nicholson, Peter. (2003). *The Growth Story: Canada's Long-run Economic Perfomance and Prospect.*. http://www.csls.ca/ipm/7/nicholson-e.pdf. Accessed July 23, 2017.   
+
+2 . Sampson, M. (2013). *Time Series Analysis: Version 4.4.* Montreal, QC: Loglinear Publishing.
+
+ 
+
